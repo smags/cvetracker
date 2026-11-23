@@ -1,0 +1,24 @@
+[Unit]
+Description=CVE Tracker (Red Hat Security Data API)
+
+[Container]
+Image=docker.io/library/python:3.12-slim
+ContainerName=cvetracker
+HostName=cvetracker.example.com
+Network=webnet
+PublishPort=127.0.0.1:8897:8897
+Volume=/opt/containers/cvetracker/app:/app:ro,Z
+Volume=/opt/containers/cvetracker/data:/data:Z
+WorkingDir=/app
+Environment=PORT=8897
+Environment=DATA_DIR=/data
+Exec=/usr/local/bin/python /app/server.py
+User=1001
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=default.target
