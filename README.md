@@ -138,3 +138,7 @@ instantly, and a daemon thread refetches expired entries every 30 s
 (`ThreadPoolExecutor`, 4 workers). The request path never touches the network
 for already-cached CVEs; only `force=True` (manual refresh, newly added CVE)
 fetches inline.
+
+An open page picks up refreshed data on its own: the UI silently re-fetches
+`/api/list` every 60 s and whenever the tab regains focus (paused while the
+Settings dialog is open, so unsaved edits are never clobbered).

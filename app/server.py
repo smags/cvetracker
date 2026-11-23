@@ -569,7 +569,7 @@ PAGE = r"""<!DOCTYPE html>
     <textarea id="inp" placeholder="Paste CVE IDs — one per line or comma-separated"></textarea>
     <div class="row">
       <button class="go" id="addbtn" onclick="addCves()">Add to list</button>
-      <span class="hint">saved on the server &middot; auto-refreshed on the interval from Settings</span>
+      <span class="hint">saved on the server &middot; cache refreshed on the Settings interval &middot; page re-checks every 60 s</span>
       <span class="errline" id="errline"></span>
     </div>
   </div>
@@ -709,13 +709,13 @@ function render(){
   document.getElementById("count").textContent = CVES.length + (CVES.length===1 ? " CVE saved" : " CVEs saved") + ((FILTER!=="all" || PRODUCT || QUERY) ? " · " + shown + " match filter" : "");
   document.getElementById("empty").style.display = (CVES.length===0 || shown===0) ? "block" : "none";
 }
-async function load(){
-  document.getElementById("loading").style.display = "";
+async function load(quiet){
+  if (!quiet) document.getElementById("loading").style.display = "";
   try {
     const r = await fetch("/api/list");
     const j = await r.json();
     CVES = j.cves || [];
-  } catch(e){ CVES = []; }
+  } catch(e){ if (!quiet) CVES = []; }
   document.getElementById("loading").style.display = "none";
   render();
 }
@@ -847,6 +847,14 @@ document.body.dataset.theme = localStorage.getItem("cv-theme") ||
   (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 syncThemeBtns();
 (async function(){ await loadSettings(); await load(); await loadSettings(); })();
+// The server refreshes its cache on the Settings interval; this makes an OPEN
+// page pick that data up without a manual reload (silent, every 60 s).
+async function autoRefresh(){
+  if (document.getElementById("modalbg").classList.contains("on")) return;
+  await load(true); await loadSettings();
+}
+setInterval(() => { if (!document.hidden) autoRefresh(); }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRefresh(); });
 </script>
 </body>
 </html>
