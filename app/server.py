@@ -48,8 +48,10 @@ STATE_FIX = {  # package_state.fix_state -> (css class, label)
     "Will not fix": ("wontfix", "Will not fix"),
     "Not affected": ("notaffected", "Not affected"),
     "New": ("new", "New"),
+    "Out of support scope": ("oos", "Out of support scope"),
+    "Out of development scope": ("oos", "Out of development scope"),
 }
-STATUS_ORDER = ["affected", "deferred", "wontfix", "new", "fixed", "notaffected"]
+STATUS_ORDER = ["affected", "deferred", "wontfix", "new", "oos", "fixed", "notaffected"]
 
 
 def natkey(s):
@@ -211,7 +213,7 @@ def _refresher():
 
 def normalize(cve, data):
     if not isinstance(data, dict):
-        return {"id": cve, "error": True, "error_msg": "unexpected API payload", "rows": [], "sum": [0, 0, 0]}
+        return {"id": cve, "error": True, "error_msg": "unexpected API payload", "rows": [], "sum": [0, 0, 0, 0]}
     rows, seen = [], {}
     for ar in data.get("affected_release") or []:
         prod = ar.get("product_name", "?")
@@ -237,7 +239,8 @@ def normalize(cve, data):
                              natkey(r["product"])))
     n_fixed = sum(1 for r in rows if r["status"] == "fixed")
     n_na = sum(1 for r in rows if r["status"] == "notaffected")
-    n_aff = len(rows) - n_fixed - n_na
+    n_oos = sum(1 for r in rows if r["status"] == "oos")
+    n_aff = len(rows) - n_fixed - n_na - n_oos
     details = data.get("details") or []
     desc = ""
     if details:
@@ -259,7 +262,7 @@ def normalize(cve, data):
         "cvss3": cvss3,
         "pkgs": pkgs,
         "rows": rows,
-        "sum": [n_fixed, n_aff, n_na],
+        "sum": [n_fixed, n_aff, n_na, n_oos],
     }
 
 
@@ -270,7 +273,7 @@ def api_list():
     for cve in state["order"]:
         data, err = get_data(cve)
         if data is None:
-            out.append({"id": cve, "error": True, "error_msg": err, "rows": [], "sum": [0, 0, 0]})
+            out.append({"id": cve, "error": True, "error_msg": err, "rows": [], "sum": [0, 0, 0, 0]})
         else:
             out.append(normalize(cve, data))
     return out
@@ -411,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
             # unknown to Red Hat (or unreachable): keep it on the list, the
             # background refresher will pick it up once info becomes available
             return self.send_json({"id": cve, "error": True, "error_msg": err,
-                                   "rows": [], "sum": [0, 0, 0]})
+                                   "rows": [], "sum": [0, 0, 0, 0]})
         self.send_json(normalize(cve, data))
 
     def do_DELETE(self):
@@ -445,6 +448,7 @@ PAGE = r"""<!DOCTYPE html>
     --link:#06c; --fixed-bg:#e3f6e8; --fixed-fg:#1a7f37; --aff-bg:#fdecea; --aff-fg:#c00;
     --wf-bg:#efe6f7; --wf-fg:#7b3fa0; --def-bg:#fff4d6; --def-fg:#9a6b00;
     --na-bg:#f0f1f3; --na-fg:#667; --new-bg:#e8eef9; --new-fg:#3b5bdb; --clear-bg:#c9ecd3;
+    --oos-bg:#e8eef9; --oos-fg:#3b5bdb;
   }
   [data-theme="dark"] {
     --bg:#16181d; --card:#1f2229; --border:#2e323b; --border2:#2a2e36; --text:#e6e8ec;
@@ -452,6 +456,7 @@ PAGE = r"""<!DOCTYPE html>
     --link:#6ab0f3; --fixed-bg:#12351d; --fixed-fg:#5dd37e; --aff-bg:#3d1714; --aff-fg:#ff7b72;
     --wf-bg:#2d1b3d; --wf-fg:#c792ea; --def-bg:#3a2e10; --def-fg:#e3b341;
     --na-bg:#25282e; --na-fg:#9aa0ab; --new-bg:#1a2440; --new-fg:#7aa2f7; --clear-bg:#1f3d28;
+    --oos-bg:#1a2440; --oos-fg:#7aa2f7;
   }
   * { box-sizing:border-box; }
   body { font-family:-apple-system,'Segoe UI',Roboto,sans-serif; color:var(--text); background:var(--bg); margin:0; padding:24px; transition:background .2s,color .2s; }
@@ -498,6 +503,7 @@ PAGE = r"""<!DOCTYPE html>
   .cb.f { background:var(--fixed-bg); color:var(--fixed-fg); }
   .cb.a { background:var(--aff-bg); color:var(--aff-fg); }
   .cb.n { background:var(--na-bg); color:var(--na-fg); }
+  .cb.o { background:var(--oos-bg); color:var(--oos-fg); }
   .meta { color:var(--faint); font-size:12px; white-space:nowrap; }
   .del { border:1px solid var(--border); background:transparent; color:var(--faint); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; }
   .del:hover { color:#e5484d; border-color:#e5484d; }
@@ -516,6 +522,7 @@ PAGE = r"""<!DOCTYPE html>
   .st.wontfix { background:var(--wf-bg); color:var(--wf-fg); }
   .st.deferred { background:var(--def-bg); color:var(--def-fg); }
   .st.new { background:var(--new-bg); color:var(--new-fg); }
+  .st.oos { background:var(--oos-bg); color:var(--oos-fg); }
   .st.notaffected { background:var(--na-bg); color:var(--na-fg); }
   .err a { font-family:ui-monospace,Menlo,monospace; color:var(--link); text-decoration:none; font-size:12.5px; }
   .err a:hover { text-decoration:underline; }
@@ -646,7 +653,7 @@ function rowMatch(r){
   if (PRODUCT && r.product !== PRODUCT) return false;
   if (FILTER === "all") return true;
   if (FILTER === "notaffected") return r.status === "notaffected";
-  return r.status !== "notaffected";
+  return r.status !== "notaffected" && r.status !== "oos";
 }
 function rebuildProductOptions(){
   const sel = document.getElementById("prodsel");
@@ -682,14 +689,14 @@ function card(d){
       <span class="cid"><a href="https://access.redhat.com/security/cve/${esc(id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(id)}</a></span>
       <span class="sev ${esc(d.sev)}">${esc(d.sev)}</span>
       <span class="one">${esc(d.desc)}</span>
-      <span class="cbadges"><span class="cb f">${d.sum[0]} fixed</span><span class="cb a">${d.sum[1]} affected</span><span class="cb n">${d.sum[2]} not affected</span></span>
+      <span class="cbadges"><span class="cb f">${d.sum[0]} fixed</span><span class="cb a">${d.sum[1]} affected</span><span class="cb n">${d.sum[2]} not affected</span>${d.sum[3]?`<span class="cb o">${d.sum[3]} unsupported</span>`:""}</span>
       <span class="meta">pub ${esc(d.pub)}${esc(cvss)}</span>
       <button class="ref" onclick="ref(event,'${id}')">↻ refresh</button><button class="del" onclick="del(event,'${id}')">✕ delete</button>
     </div>
     <div class="cbody" style="${open?"":"display:none"}">
       ${d.pkgs.length?`<div class="pkg">packages: <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">${d.pkgs.map(esc).join(", ")}</span></div>`:""}
       <table><tr><th style="width:34%">Product</th><th style="width:16%">Status</th><th>Errata / fixed package</th></tr>${rows}</table>
-      <div class="summary"><span><b>${d.sum[0]}</b> fixed</span><span>·</span><span><b>${d.sum[1]}</b> affected</span><span>·</span><span><b>${d.sum[2]}</b> not affected</span></div>
+      <div class="summary"><span><b>${d.sum[0]}</b> fixed</span><span>·</span><span><b>${d.sum[1]}</b> affected</span><span>·</span><span><b>${d.sum[2]}</b> not affected</span>${d.sum[3]?`<span>·</span><span><b>${d.sum[3]}</b> unsupported</span>`:""}</div>
     </div>
   </div>`;
 }
