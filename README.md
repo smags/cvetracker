@@ -8,6 +8,8 @@ into per-product rows (fixed / affected / not affected), and caches the raw API
 responses on disk. The UI is fully embedded in the Python file — no build step,
 no JS framework, no database.
 
+![CVE Tracker UI (dark theme, expanded CVE card)](docs/screenshot.png)
+
 ## File guide
 
 | Path | Purpose |
@@ -18,6 +20,7 @@ no JS framework, no database.
 | `data/cves.json` | The saved CVE list (`{"order": [...]}`) — the app's only "database" for what you track. Ships with demo entries. |
 | `data/settings.json` | Server-side settings so they follow across browsers: `refresh_min` (cache TTL: 30/60/120/180), `theme` (light/dark), `product` (selected filter), `last_sync`, and proxy config (`proxy_enabled`, `proxy_host`, `proxy_user`, `proxy_pass`). Proxy ships disabled. |
 | `data/cache/*.json` | Raw (normalized) Red Hat API response per CVE, one file each. TTL-expired entries are refetched in the background; unknown CVEs are cached as `{"data": null}` markers and resolve automatically once Red Hat publishes them. |
+| `docs/screenshot.png` | Screenshot of the UI (shown above). |
 | `.gitignore` | Excludes Python bytecode. |
 
 ## Requirements
